@@ -1,0 +1,76 @@
+import ds.helper_functions as hf
+import pandas as pd
+
+conn1 = hf.connect(azure=True, db='TEPEZZA')
+conn2 = hf.connect(azure=True, db='hdp_hub')
+
+hcp = pd.read_sql("""SELECT [hcp_id] as hcp_id
+      ,[npi]
+      ,[first_name]
+      ,[last_name]
+      ,[specialty_group]
+      ,[address_1]
+      ,[address_2]
+      ,[city]
+      ,[state]
+      ,[zip] as hcp_zip
+  FROM [analytics].[mstr_hcp]""", conn1)
+
+pef=pd.read_sql( '''SELECT 
+      [patient_id]
+      ,[therapy_course_num]
+      ,[enrollment_date]
+      ,[enrolling_hcp_id] 
+      ,[winning_zip] 
+      ,concat(year(enrollment_date),'-',RIGHT('0' + RTRIM(MONTH(enrollment_date)), 2)) as ym
+  FROM [analytics].[therapy_courses]
+  where [enrollment_date]>'2022-01-01'
+  and [tier]='On-Label'
+  and status IS NOT NULL
+  ''',conn1)
+
+hcp_activity=pd.read_sql( '''SELECT  [enrolling_hcp_id]
+      ,[timeframe_category]
+      ,[timeframe]
+      ,[num_patients]
+      ,[num_patients_rolling180days]
+      ,[adoption_stage]
+      ,[writer_status]
+      ,[new]
+      ,[lapsed]
+      ,[returning]
+      ,1 as count
+  FROM [analytics].[mstr_hcp_adoption_stage]
+  WHERE timeframe_category ='month'
+  AND timeframe > '2021-12'
+  ''',conn1)
+
+iv=pd.read_sql( '''select tc.patient_id,enrollment_date,tc.enrolling_hcp_id, tc.winning_zip,ti.therapy_course_num ,ti.infusion_date ,1 as count,concat(year(infusion_date),'-',RIGHT('0' + RTRIM(MONTH(infusion_date)), 2)) as ym,concat(year(enrollment_date),'-',RIGHT('0' + RTRIM(MONTH(enrollment_date)), 2)) as enroll_ym,DATEDIFF(month,  enrollment_date,infusion_date) AS DateDiff,
+DATEDIFF(day,  enrollment_date,infusion_date) AS DayDiff,
+concat(year(enrollment_date),'Q',DATEPART(QUARTER, enrollment_date)) as yrqr
+from [analytics].therapy_courses tc
+left join [analytics].therapy_course_infusions ti
+on tc.patient_id=ti.patient_id and tc.therapy_course_num=ti.therapy_course_num
+where tc.tier = 'On-Label' and tc.status in ('Active', 'Inactive Post-IV') and
+ti.infusion_num=1 and ti.infusion_date is not null
+and infusion_date >= '2022-01-01' 
+  ''',conn1)
+
+z2t=pd.read_sql( '''SELECT [zip]
+,[territory_code]
+,[bu]
+,[team]
+,[product_id]
+,[effective_date]
+FROM [analytics].[mstr_ziptoterr]
+WHERE team = 'SAM'
+  ''',conn1)
+
+roster=pd.read_sql( '''SELECT [territory_code] as terr
+,[first_name]
+FROM [analytics].[mstr_roster]
+WHERE sf_code = 'SAM'
+  ''',conn1)
+
+dma=pd.read_sql( '''
+  ''',conn2)
